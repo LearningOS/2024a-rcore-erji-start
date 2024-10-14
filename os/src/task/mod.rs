@@ -46,15 +46,22 @@ pub struct TaskManagerInner {
     /// id of current `Running` task
     current_task: usize,
 }
+/// 操作系统支持的最大系统调用数量。
+///
+/// 此常量定义了操作系统可以注册和处理的系统调用的上限。
+/// 其值设置为 500，允许提供足够的功能范围，同时保持系统调用管理的复杂性可控。
+pub const MAX_SYSCALL_NUM: usize = 500; 
 
 lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-        }; MAX_APP_NUM];
+       let mut tasks = [TaskControlBlock {
+    task_cx: TaskContext::zero_init(),
+    task_status: TaskStatus::UnInit,
+    syscall_times: [0; MAX_SYSCALL_NUM], // 为 syscall_times 提供一个初始值
+}; MAX_APP_NUM];
+
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
@@ -89,14 +96,32 @@ impl TaskManager {
         }
         panic!("unreachable in run_first_task!");
     }
-
+    /// 获取当前运行任务的索引。
+///
+/// 该方法返回一个 `Option<usize>`，
+/// 如果当前任务存在，则返回其索引；
+/// 如果没有当前任务，则返回 `None`。
+     pub fn get_current_task_index(&self) -> Option<usize> {
+        let inner = self.inner.exclusive_access(); // 获取对内的独占访问
+        Some(inner.current_task) // 返回当前任务的索引
+    }
+    /// 获取当前运行任务的控制块。
+///
+/// 该方法返回一个 `Option<TaskControlBlock>`，
+/// 如果当前任务存在，则返回其控制块；
+/// 如果没有当前任务，则返回 `None`。
+    pub fn get_current_task(&self) -> Option<TaskControlBlock> {
+        let inner = self.inner.exclusive_access();
+        Some(inner.tasks[inner.current_task].clone()) // 返回当前任务的克隆
+    }
+  
     /// Change the status of current `Running` task into `Ready`.
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Ready;
     }
-
+        
     /// Change the status of current `Running` task into `Exited`.
     fn mark_current_exited(&self) {
         let mut inner = self.inner.exclusive_access();

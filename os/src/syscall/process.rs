@@ -16,11 +16,11 @@ pub struct TimeVal {
 #[allow(dead_code)]
 pub struct TaskInfo {
     /// Task status in it's life cycle
-    status: TaskStatus,
+   pub  status: TaskStatus,
     /// The numbers of syscall called by task
-    syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
-    time: usize,
+    pub time: usize,
 }
 
 /// task exits and submit an exit code
@@ -50,8 +50,30 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     0
 }
 
+
+
+use crate::task::TASK_MANAGER; 
+use crate::timer::get_time;
+
 /// YOUR JOB: Finish sys_task_info to pass testcases
-pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
+pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
-    -1
+
+    // 使用新方法获取当前任务的可变引用
+    let current_task = TASK_MANAGER.get_current_task();
+
+    if current_task.is_none() {
+        return -1; // 如果没有当前任务，则返回错误
+    }
+
+    let task = current_task.unwrap();
+
+    // 将当前任务信息填充到 TaskInfo 结构体
+    let task_info = unsafe { &mut *ti };
+    task_info.status = task.task_status; // 当前任务状态
+    task_info.syscall_times = task.syscall_times.clone(); // 复制系统调用次数
+    task_info.time = get_time(); // 获取任务运行总时长
+
+    0 // 成功返回0
 }
+
